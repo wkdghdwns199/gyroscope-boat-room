@@ -1,9 +1,9 @@
 #include <Wire.h>
-#include <ESP32Servo.h> // ESP32용 서보 라이브러리 추가
-#include "BluetoothSerial.h" // ESP32의 블루투스 시리얼 라이브러리 추가
+#include <ESP32Servo.h>       // ESP32용 서보 라이브러리 추가
+#include "BluetoothSerial.h"  // ESP32의 블루투스 시리얼 라이브러리 추가
 
-const int MPU_ADDR = 0x68;    // I2C 통신을 위한 MPU6050의 주소
-int16_t AcX, AcY, AcZ, Tmp, GyX, GyY, GyZ;   // 가속도와 자이로
+const int MPU_ADDR = 0x68;                  // I2C 통신을 위한 MPU6050의 주소
+int16_t AcX, AcY, AcZ, Tmp, GyX, GyY, GyZ;  // 가속도와 자이로
 double angleAcX, angleAcY, angleAcZ;
 double angleGyX, angleGyY, angleGyZ;
 double angleFiX, angleFiY, angleFiZ;
@@ -29,10 +29,10 @@ Servo mg995_3;
 Servo mg995_4;
 
 // ESP32에서 사용할 핀 번호 설정
-int servoPin1 = 14; // 서보 모터 1
-int servoPin2 = 12; // 서보 모터 2
-int servoPin3 = 27; // 서보 모터 3
-int servoPin4 = 26; // 서보 모터 4
+int servoPin1 = 14;  // 서보 모터 1
+int servoPin2 = 12;  // 서보 모터 2
+int servoPin3 = 27;  // 서보 모터 3
+int servoPin4 = 26;  // 서보 모터 4
 
 // ESP32의 블루투스 시리얼 객체 생성
 BluetoothSerial bluetooth;
@@ -71,12 +71,12 @@ double movingAverage(double data[], double newData) {
 void setup() {
   // MPU6050 초기화
   initSensor();
-  Serial.begin(115200);
+  Serial.begin(9600);
   bluetooth.begin("ESP32_Gyroscope");
 
   // 자이로 캘리브레이션
   calibrateGyro();
-  
+
   past = millis();
 
   // 서보 모터 핀에 연결
@@ -96,26 +96,26 @@ void setup() {
 void loop() {
   // 블루투스로 들어온 명령 확인 (모드 전환 및 수동 제어 모드의 각도 수신)
   if (bluetooth.available()) {
-    String command = bluetooth.readStringUntil('\n');  // 블루투스에서 들어온 값을 읽음
-    
+    String command = bluetooth.readStringUntil('c');  // 블루투스에서 들어온 값을 읽음
+
     // 모드 전환 명령
     if (command == "AUTO") {
       controlMode = 0;  // 자동 모드로 전환
     } else if (command == "MANUAL") {
       controlMode = 1;  // 수동 모드로 전환
     }
-    
+
     // 수동 모드에서 들어온 각도 값 (예: "X:90 Y:80" 형식으로 받는다고 가정)
     if (controlMode == 1) {
       if (command.startsWith("X:")) {
         int xIndex = command.indexOf("X:") + 2;
-        int yIndex = command.indexOf("Y:");
-        targetAngleX = command.substring(xIndex, yIndex).toInt();
-        targetAngleY = command.substring(yIndex + 2).toInt();
-        
+        targetAngleX = command.substring(xIndex).toInt();
         Serial.print("수동 모드에서 받은 목표 각도 - X: ");
-        Serial.print(targetAngleX);
-        Serial.print(", Y: ");
+        Serial.println(targetAngleX);
+      } else if (command.startsWith("Y:")) {
+        int yIndex = command.indexOf("Y:");
+        targetAngleY = command.substring(yIndex + 2).toInt();
+        Serial.print("수동 모드에서 받은 목표 각도 - Y: ");
         Serial.println(targetAngleY);
       }
     }
@@ -173,8 +173,11 @@ void loop() {
     mg995_2.write(servoAngleX2);
     mg995_3.write(servoAngleY1);
     mg995_4.write(servoAngleY2);
+
+    // 자이로 데이터 블루투스로 전송 (angleFiX, angleFiY 값)
+    sendGyroDataToBluetooth();
   }
-  
+
   // 수동 제어 모드
   if (controlMode == 1) {
     // 현재 각도에서 목표 각도로 서서히 이동 (1도씩)
@@ -246,4 +249,10 @@ void calibrateGyro() {
   offsetGyX = sumGyX / 100;
   offsetGyY = sumGyY / 100;
   offsetGyZ = sumGyZ / 100;
+}
+
+// 자이로 데이터를 블루투스로 전송하는 함수
+void sendGyroDataToBluetooth() {
+  String gyroData = String(angleFiX) + ", " + String(angleFiY);
+  bluetooth.println(gyroData);  // 블루투스로 angleFiX, angleFiY 값 전송
 }
